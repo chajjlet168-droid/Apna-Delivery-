@@ -16,7 +16,13 @@ jobs:
 
       - name: Unzip Android Project
         run: |
-          ZIP=$(find . -maxdepth 1 -type f -name "*.zip" | head -1)
+          ZIP=$(find . -maxdepth 2 -type f -name "*.zip" | head -1)
+
+          if [ -z "$ZIP" ]; then
+            echo "Android project ZIP not found"
+            exit 1
+          fi
+
           mkdir -p android-project
           unzip -o "$ZIP" -d android-project
 
@@ -26,23 +32,45 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Find Gradle wrapper
+      - name: Find Android Project
         run: |
-          GRADLEW=$(find android-project -name gradlew -type f | head -1)
-          if [ -z "$GRADLEW" ]; then
-            echo "gradlew not found"
+          SETTINGS=$(find android-project -type f \( -name "settings.gradle" -o -name "settings.gradle.kts" \) | head -1)
+
+          if [ -z "$SETTINGS" ]; then
+            echo "settings.gradle not found"
             exit 1
           fi
-          chmod +x "$GRADLEW"
-          echo "GRADLEW=$GRADLEW" >> "$GITHUB_ENV"
+
+          PROJECT_DIR=$(dirname "$SETTINGS")
+
+          echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
+          echo "Android project found at: $PROJECT_DIR"
+
+      - name: Install Gradle
+        run: |
+          wget -q https://services.gradle.org/distributions/gradle-8.10.2-bin.zip
+          unzip -q gradle-8.10.2-bin.zip
+          echo "$PWD/gradle-8.10.2/bin" >> $GITHUB_PATH
 
       - name: Build Debug APK
         run: |
-          cd "$(dirname "$GRADLEW")"
-          ./gradlew assembleDebug
+          cd "$PROJECT_DIR"
+          gradle assembleDebug --no-daemon
+
+      - name: Find APK
+        run: |
+          APK=$(find "$PROJECT_DIR" -type f -path "*/build/outputs/apk/debug/*.apk" | head -1)
+
+          if [ -z "$APK" ]; then
+            echo "APK not found"
+            exit 1
+          fi
+
+          echo "APK=$APK" >> $GITHUB_ENV
+          echo "APK found: $APK"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: Apna-Delivery-APK
-          path: android-project/**/build/outputs/apk/debug/*.apk
+          path: ${{ env.APK }}
