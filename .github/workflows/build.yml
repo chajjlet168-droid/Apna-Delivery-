@@ -2,9 +2,6 @@ name: Build APK
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
 
 jobs:
   build:
@@ -14,20 +11,33 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Unzip Android Project
+        run: |
+          unzip -o Apna_Delivery_Android_Project.zip -d android-project
+          find android-project -maxdepth 3 -type f | head -30
+
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
+      - name: Find Gradle wrapper
+        run: |
+          find android-project -name gradlew -type f
+
       - name: Make gradlew executable
-        run: chmod +x gradlew
+        run: |
+          chmod +x $(find android-project -name gradlew -type f | head -1)
 
       - name: Build Debug APK
-        run: ./gradlew assembleDebug
+        run: |
+          GRADLEW=$(find android-project -name gradlew -type f | head -1)
+          cd "$(dirname "$GRADLEW")"
+          ./gradlew assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: Apna-Delivery-APK
-          path: app/build/outputs/apk/debug/*.apk
+          path: android-project/**/build/outputs/apk/debug/*.apk
